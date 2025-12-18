@@ -253,7 +253,7 @@
     }
 
     // Helper function to decompress data using DecompressionStream API
-    async function decompressData(compressedData) {
+    async function decompressData(compressedData, algorithm = 'gzip') {
         const stream = new ReadableStream({
             start(controller) {
                 controller.enqueue(compressedData);
@@ -261,7 +261,7 @@
             }
         });
         
-        const decompressionStream = new DecompressionStream('gzip');
+        const decompressionStream = new DecompressionStream(algorithm);
         const decompressedStream = stream.pipeThrough(decompressionStream);
         const chunks = [];
         const reader = decompressedStream.getReader();
@@ -317,13 +317,23 @@
         url.searchParams.set('path', path);
         
         // Compress and encode yaml parameter
-        if (COMPRESSION_ALGORITHM === 'gzip') {
-            const compressed = await compressData(yaml);
-            const encoded = uint8ArrayToBase64Url(compressed);
-            url.searchParams.set('input', encoded);
-            url.searchParams.set('c', 'gzip');
+        // Check if CompressionStream is available in the browser
+        const compressionSupported = typeof CompressionStream !== 'undefined';
+        
+        if (COMPRESSION_ALGORITHM === 'gzip' && compressionSupported) {
+            try {
+                const compressed = await compressData(yaml);
+                const encoded = uint8ArrayToBase64Url(compressed);
+                url.searchParams.set('input', encoded);
+                url.searchParams.set('c', 'gzip');
+            } catch (e) {
+                console.warn('Compression failed, falling back to no compression:', e);
+                // Fallback to no compression if compression fails
+                url.searchParams.set('input', encodeURIComponent(yaml));
+                url.searchParams.set('c', 'none');
+            }
         } else {
-            // No compression
+            // No compression (either configured or not supported)
             url.searchParams.set('input', encodeURIComponent(yaml));
             url.searchParams.set('c', 'none');
         }
@@ -367,7 +377,7 @@
                 
                 if (compression === 'gzip') {
                     const compressed = base64UrlToUint8Array(inputData);
-                    initialYaml = await decompressData(compressed);
+                    initialYaml = await decompressData(compressed, 'gzip');
                 } else {
                     initialYaml = decodeURIComponent(inputData);
                 }
