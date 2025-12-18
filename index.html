@@ -332,7 +332,7 @@
                 compressedEncoded = uint8ArrayToBase64Url(compressed);
                 
                 // Use compression only if it results in a smaller URL parameter
-                // Factor in the cost of the 'c=<algorithm>' parameter (7 chars: &c=gzip)
+                // Factor in the cost of the 'c=<algorithm>' parameter (e.g., 7 chars for &c=gzip)
                 useCompression = (compressedEncoded.length + 7) < uncompressedEncoded.length;
             } catch (e) {
                 console.warn('Compression failed, using uncompressed:', e);
