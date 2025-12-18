@@ -198,8 +198,7 @@
     let isLoadedFromUrl = false;
     let yamlEditor; // Will be initialized by Monaco
 
-    // Configuration: compression algorithm to use ('gzip' or 'none')
-    const COMPRESSION_ALGORITHM = 'gzip';
+
 
     const getPreferredTheme = () => {
         const storedTheme = localStorage.getItem('theme')
@@ -316,26 +315,36 @@
         // Encode path parameter
         url.searchParams.set('path', path);
         
-        // Compress and encode yaml parameter
         // Check if CompressionStream is available in the browser
         const compressionSupported = typeof CompressionStream !== 'undefined';
         
-        if (COMPRESSION_ALGORITHM === 'gzip' && compressionSupported) {
+        // Encode uncompressed version
+        const uncompressedEncoded = encodeURIComponent(yaml);
+        
+        // Try compression and compare sizes
+        let useCompression = false;
+        let compressedEncoded = '';
+        
+        if (compressionSupported) {
             try {
                 const compressed = await compressData(yaml);
-                const encoded = uint8ArrayToBase64Url(compressed);
-                url.searchParams.set('input', encoded);
-                url.searchParams.set('c', 'gzip');
+                compressedEncoded = uint8ArrayToBase64Url(compressed);
+                
+                // Use compression only if it results in a smaller URL parameter
+                useCompression = compressedEncoded.length < uncompressedEncoded.length;
             } catch (e) {
-                console.warn('Compression failed, falling back to no compression:', e);
-                // Fallback to no compression if compression fails
-                url.searchParams.set('input', encodeURIComponent(yaml));
-                url.searchParams.set('c', 'none');
+                console.warn('Compression failed, using uncompressed:', e);
+                useCompression = false;
             }
+        }
+        
+        // Set input parameter and compression flag based on which is smaller
+        if (useCompression) {
+            url.searchParams.set('input', compressedEncoded);
+            url.searchParams.set('c', 'gzip');
         } else {
-            // No compression (either configured or not supported)
-            url.searchParams.set('input', encodeURIComponent(yaml));
-            url.searchParams.set('c', 'none');
+            url.searchParams.set('input', uncompressedEncoded);
+            // Don't set 'c' parameter when not compressing (default is 'none')
         }
         
         const newUrl = url.toString();
