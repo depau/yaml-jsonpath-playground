@@ -198,7 +198,8 @@
     let isLoadedFromUrl = false;
     let yamlEditor; // Will be initialized by Monaco
 
-
+    // Configuration: compression algorithm to use ('gzip' or 'none')
+    const COMPRESSION_ALGORITHM = 'gzip';
 
     const getPreferredTheme = () => {
         const storedTheme = localStorage.getItem('theme')
