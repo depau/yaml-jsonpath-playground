@@ -221,7 +221,7 @@
     setTheme(getPreferredTheme());
 
     // Helper function to compress data using CompressionStream API
-    async function compressData(data) {
+    async function compressData(data, algorithm = 'gzip') {
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
             start(controller) {
@@ -230,7 +230,7 @@
             }
         });
         
-        const compressionStream = new CompressionStream('gzip');
+        const compressionStream = new CompressionStream(algorithm);
         const compressedStream = stream.pipeThrough(compressionStream);
         const chunks = [];
         const reader = compressedStream.getReader();
@@ -322,17 +322,17 @@
         // Encode uncompressed version
         const uncompressedEncoded = encodeURIComponent(yaml);
         
-        // Try compression and compare sizes
+        // Try compression and compare sizes based on configuration
         let useCompression = false;
         let compressedEncoded = '';
         
-        if (compressionSupported) {
+        if (COMPRESSION_ALGORITHM === 'gzip' && compressionSupported) {
             try {
-                const compressed = await compressData(yaml);
+                const compressed = await compressData(yaml, COMPRESSION_ALGORITHM);
                 compressedEncoded = uint8ArrayToBase64Url(compressed);
                 
                 // Use compression only if it results in a smaller URL parameter
-                // Factor in the cost of the 'c=gzip' parameter (7 chars: &c=gzip)
+                // Factor in the cost of the 'c=<algorithm>' parameter (7 chars: &c=gzip)
                 useCompression = (compressedEncoded.length + 7) < uncompressedEncoded.length;
             } catch (e) {
                 console.warn('Compression failed, using uncompressed:', e);
@@ -343,7 +343,7 @@
         // Set input parameter and compression flag based on which is smaller
         if (useCompression) {
             url.searchParams.set('input', compressedEncoded);
-            url.searchParams.set('c', 'gzip');
+            url.searchParams.set('c', COMPRESSION_ALGORITHM);
         } else {
             url.searchParams.set('input', uncompressedEncoded);
             // Don't set 'c' parameter when not compressing (default is 'none')
@@ -388,7 +388,7 @@
                 
                 if (compression === 'gzip') {
                     const compressed = base64UrlToUint8Array(inputData);
-                    initialYaml = await decompressData(compressed, 'gzip');
+                    initialYaml = await decompressData(compressed, compression);
                 } else {
                     initialYaml = decodeURIComponent(inputData);
                 }
