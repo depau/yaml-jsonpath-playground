@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="auto">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YAML/JSONPath Playground</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root {
+            --editor-font-family: 'Fira Code', 'Courier New', Courier, monospace;
+        }
+
+        #editors-container {
+            min-height: 0;
+        }
+
+        .editor-container {
+            height: 70vh;
+        }
+
+        @media screen and (max-width: 991px) {
+            .editor-container {
+                height: 500px;
+            }
+        }
+
+        #error-alert {
+            display: none; /* Hidden by default */
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            margin-top: 0.5rem; /* Add margin top */
+        }
+
+        #error-alert.show {
+            display: block; /* Shown when 'show' class is added */
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg bg-body-tertiary">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="#">YAML/JSONPath Playground</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
+                aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            </ul>
+            <ul class="navbar-nav mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="https://github.com/depau/yaml-jsonpath-playground" rel="noopener" target="_blank"><i class="bi bi-github"></i> Source code</a>
+                </li>
+                <li class="nav-item">
+                    <button type="button" class="nav-link" id="share-button" data-bs-toggle="modal"
+                            data-bs-target="#shareModal">
+                        <i class="bi bi-share"></i> Share
+                    </button>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
+                       aria-expanded="false">
+                        <i class="bi bi-circle-half"></i> Theme
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#" data-bs-theme-value="light"><i class="bi bi-sun"></i>
+                            Light</a></li>
+                        <li><a class="dropdown-item" href="#" data-bs-theme-value="dark"><i class="bi bi-moon"></i> Dark</a>
+                        </li>
+                        <li><a class="dropdown-item" href="#" data-bs-theme-value="auto"><i
+                                class="bi bi-circle-half"></i> Auto</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid py-3">
+    <main>
+        <div class="mb-3">
+            <label for="path-input">JSONPath Expression:</label>
+            <input type="text" id="path-input" class="form-control font-monospace" placeholder="$.store.book[*].author">
+            <div id="error-alert" class="alert alert-danger"></div>
+        </div>
+        <div id="editors-container" class="row">
+            <div class="col-lg-6">
+                <label for="yaml-input-editor">YAML Document:</label>
+                <div id="yaml-input-editor" class="editor-container border rounded"></div>
+            </div>
+            <div class="col-lg-6">
+                <label for="output-editor">Output:</label>
+                <div id="output-editor" class="editor-container border rounded"></div>
+            </div>
+        </div>
+        <div class="mb-3">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="text-wrap-toggle">
+                <label class="form-check-label" for="text-wrap-toggle">Wrap long lines</label>
+            </div>
+        </div>
+    </main>
+
+    <div id="documentation" class="mt-4 container">
+        <h2 class="mb-3">Quick Reference</h2>
+        <div>
+            <details class="mb-3">
+                <summary class="fw-bold">Basic Selectors</summary>
+                <ul>
+                    <li><code>$</code> - The root of the document.</li>
+                    <li><code>.child</code> or <code>['child']</code> - Select a child of a mapping node.</li>
+                    <li><code>[1]</code> - Select the second element of a sequence (0-indexed).</li>
+                    <li><code>[-1]</code> - Select the last element of a sequence.</li>
+                    <li><code>[0:5]</code> - Select elements from index 0 up to (but not including) 5.</li>
+                    <li><code>[*]</code> - Select all elements of a sequence or all values of a map.</li>
+                    <li><code>..child</code> - Recursive descent: find all children named 'child' at any level.</li>
+                </ul>
+            </details>
+            <details class="mb-3">
+                <summary class="fw-bold">Filters `[?(...)]`</summary>
+                <p>Filters allow you to select nodes based on conditions.</p>
+                <ul>
+                    <li><code>@</code> - The current node being processed in the filter.</li>
+                    <li><code>@.price < 10</code> - Select nodes where the 'price' child is less than 10.</li>
+                    <li><code>@.author == 'Nigel Rees'</code> - Select nodes where the author is 'Nigel Rees'.</li>
+                    <li><code>@.isbn</code> - Select nodes that have an 'isbn' child (existence).</li>
+                    <li><code>@.title =~ /Honour/</code> - Select nodes where the title matches a regular expression.
+                    </li>
+                </ul>
+                <p>Combine expressions with <code>&&</code> (and) and <code>||</code> (or).</p>
+            </details>
+            <details class="mb-3">
+                <summary class="fw-bold">Property Name Operator `~`</summary>
+                <p>Use <code>~</code> to get the name of a property instead of its value. This can only be used at the
+                    end of a
+                    path.</p>
+                <ul>
+                    <li><code>.child~</code></li>
+                    <li><code>['child']~</code></li>
+                    <li><code>['child1', 'child2']~</code></li>
+                </ul>
+            </details>
+            <details class="mb-3">
+                <summary class="fw-bold">Helm/Kubernetes Examples</summary>
+                <p>Sample expressions for inspecting rendered Helm templates.</p>
+                <p><strong>Example:</strong> Find the image of the 'my-app' container in a Deployment.</p>
+                <pre><code>$.spec.template.spec.containers[?(@.name=='my-app')].image</code></pre>
+                <p><strong>Example:</strong> Find a specific annotation on a Service.</p>
+                <pre><code>$.metadata.annotations['my-annotation/key']</code></pre>
+                <p><strong>Example:</strong> Find all Pods that have a 'my-app' container.</p>
+                <pre><code>$..spec.template.spec.containers[?(@.name=='my-app')]</code></pre>
+            </details>
+        </div>
+    </div>
+</div>
+
+<!-- Share Modal -->
+<div class="modal fade" id="shareModal" tabindex="-1" aria-labelledby="shareModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5" id="shareModalLabel">Share</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Share the following URL with others:</p>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="share-url-input" readonly>
+                    <button class="btn btn-outline-secondary" type="button" id="copy-share-url-button">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js"></script>
+<script src="wasm_exec.js"></script>
+<script>
+    const pathInput = document.getElementById('path-input');
+    const errorAlert = document.getElementById('error-alert');
+    const textWrapToggle = document.getElementById('text-wrap-toggle');
+    const shareUrlInput = document.getElementById('share-url-input');
+    const copyShareUrlButton = document.getElementById('copy-share-url-button');
+
+    let isLoadedFromUrl = false;
+    let yamlEditor; // Will be initialized by Monaco
+
+    const getPreferredTheme = () => {
+        const storedTheme = localStorage.getItem('theme')
+        if (storedTheme) {
+            return storedTheme
+        }
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    }
+
+    const setTheme = theme => {
+        let effectiveTheme = theme;
+        if (theme === 'auto') {
+            effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-bs-theme', effectiveTheme);
+        return effectiveTheme;
+    }
+
+    setTheme(getPreferredTheme());
+
+    function updateShareUrl() {
+        const data = {
+            path: pathInput.value,
+            yaml: yamlEditor.getValue(),
+        };
+        const encoded = btoa(encodeURIComponent(JSON.stringify(data)));
+        const newUrl = window.location.pathname + '#' + encoded;
+        history.replaceState(null, '', newUrl);
+        shareUrlInput.value = window.location.href;
+    }
+
+    async function main() {
+        const go = new Go();
+        const result = await WebAssembly.instantiateStreaming(fetch('main.wasm'), go.importObject);
+        go.run(result.instance);
+
+        let initialYaml = localStorage.getItem('yaml') || `store:
+  book:
+    - category: reference
+      author: Nigel Rees
+      title: Sayings of the Century
+      price: 8.95
+    - category: fiction
+      author: Evelyn Waugh
+      title: Sword of Honour
+      price: 12.99
+  bicycle:
+    color: red
+    price: 19.95`;
+        let initialPath = localStorage.getItem('path') || '$.store.book[*].author';
+
+        if (window.location.hash) {
+            try {
+                const decoded = decodeURIComponent(atob(window.location.hash.substring(1)));
+                const data = JSON.parse(decoded);
+                if (data.path && data.yaml) {
+                    initialPath = data.path;
+                    initialYaml = data.yaml;
+                    isLoadedFromUrl = true;
+                }
+            } catch (e) {
+                console.error("Failed to parse URL hash:", e);
+            }
+        }
+
+        const colorScheme = document.documentElement.getAttribute('data-bs-theme');
+
+        require.config({paths: {'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs'}});
+        require(['vs/editor/editor.main'], () => {
+
+            const commonEditorOptions = {
+                language: 'yaml',
+                theme: colorScheme === 'dark' ? 'vs-dark' : 'vs',
+                automaticLayout: true,
+                wordWrap: 'off'
+            };
+
+            yamlEditor = monaco.editor.create(document.getElementById('yaml-input-editor'), {
+                ...commonEditorOptions,
+                value: initialYaml,
+            });
+
+            const outputEditor = monaco.editor.create(document.getElementById('output-editor'), {
+                ...commonEditorOptions,
+                value: '',
+                readOnly: true
+            });
+
+            const performEvaluation = () => {
+                const yaml = yamlEditor.getValue();
+                const path = pathInput.value;
+                if (yaml && path) {
+                    const result = evaluate(yaml, path);
+                    if (result.startsWith('YAML Error:') || result.startsWith('JSONPath Error:') || result.startsWith('Evaluation Error:') || result.startsWith('Output Encoding Error:')) {
+                        errorAlert.textContent = result;
+                        errorAlert.classList.add('show');
+                        errorAlert.style.display = 'block'; // Ensure it's visible
+                        outputEditor.setValue('');
+                    } else {
+                        errorAlert.classList.remove('show');
+                        // Set display to none after the transition to fully hide it.
+                        // A small delay ensures the opacity transition completes.
+                        setTimeout(() => {
+                            if (!errorAlert.classList.contains('show')) {
+                                errorAlert.style.display = 'none';
+                            }
+                        }, 300); // Match this with your CSS transition duration
+                        outputEditor.setValue(result);
+                    }
+                } else {
+                    errorAlert.classList.remove('show');
+                    setTimeout(() => {
+                        if (!errorAlert.classList.contains('show')) {
+                            errorAlert.style.display = 'none';
+                        }
+                    }, 300);
+                    outputEditor.setValue('');
+                }
+            };
+
+            textWrapToggle.addEventListener('change', () => {
+                const wordWrap = textWrapToggle.checked ? 'on' : 'off';
+                yamlEditor.updateOptions({wordWrap: wordWrap});
+                outputEditor.updateOptions({wordWrap: wordWrap});
+            });
+
+            pathInput.value = initialPath;
+
+            yamlEditor.onDidChangeModelContent(() => {
+                if (!isLoadedFromUrl) {
+                    localStorage.setItem('yaml', yamlEditor.getValue());
+                }
+                isLoadedFromUrl = false; // Reset after first change
+                performEvaluation();
+                updateShareUrl();
+            });
+
+            pathInput.addEventListener('input', () => {
+                if (!isLoadedFromUrl) {
+                    localStorage.setItem('path', pathInput.value);
+                }
+                isLoadedFromUrl = false; // Reset after first change
+                performEvaluation();
+                updateShareUrl();
+            });
+
+            performEvaluation();
+            updateShareUrl(); // Create initial share URL
+
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                const storedTheme = localStorage.getItem('theme')
+                if (storedTheme === 'auto' || !storedTheme) {
+                    const newColorScheme = setTheme(getPreferredTheme());
+                    const monacoTheme = newColorScheme === 'dark' ? 'vs-dark' : 'vs';
+                    yamlEditor.updateOptions({theme: monacoTheme});
+                    outputEditor.updateOptions({theme: monacoTheme});
+                }
+            })
+
+            document.querySelectorAll('[data-bs-theme-value]').forEach(toggle => {
+                toggle.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const themeValue = e.currentTarget.getAttribute('data-bs-theme-value');
+                    localStorage.setItem('theme', themeValue);
+                    const newColorScheme = setTheme(themeValue);
+                    const monacoTheme = newColorScheme === 'dark' ? 'vs-dark' : 'vs';
+                    yamlEditor.updateOptions({theme: monacoTheme});
+                    outputEditor.updateOptions({theme: monacoTheme});
+                })
+            })
+
+            copyShareUrlButton.addEventListener('click', () => {
+                navigator.clipboard.writeText(shareUrlInput.value).then(() => {
+                    const originalText = copyShareUrlButton.innerHTML;
+                    copyShareUrlButton.innerHTML = '<i class="bi bi-check-lg"></i> Copied!';
+                    setTimeout(() => {
+                        copyShareUrlButton.innerHTML = originalText;
+                    }, 2000);
+                });
+            });
+        });
+    }
+
+    main();
+</script>
+</body>
+</html>
