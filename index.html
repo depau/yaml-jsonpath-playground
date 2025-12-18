@@ -242,7 +242,7 @@
   bicycle:
     color: red
     price: 19.95`;
-        let initialPath = localStorage.getItem('path') || '$.store.book[*].author';
+        let initialPath = localStorage.getItem('path') || '$.store.book[?(@.category=="fiction")].author';
 
         if (window.location.hash) {
             try {
