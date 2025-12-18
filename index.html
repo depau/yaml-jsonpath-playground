@@ -97,7 +97,10 @@
                 <div id="output-editor" class="editor-container border rounded"></div>
             </div>
         </div>
-        <div class="mb-3">
+        <div class="mb-3 d-flex justify-content-between align-items-center">
+            <button type="button" class="btn btn-outline-secondary" id="clear-button">
+                <i class="bi bi-arrow-counterclockwise"></i> Clear
+            </button>
             <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox" role="switch" id="text-wrap-toggle">
                 <label class="form-check-label" for="text-wrap-toggle">Wrap long lines</label>
@@ -190,9 +193,13 @@
     const textWrapToggle = document.getElementById('text-wrap-toggle');
     const shareUrlInput = document.getElementById('share-url-input');
     const copyShareUrlButton = document.getElementById('copy-share-url-button');
+    const clearButton = document.getElementById('clear-button');
 
     let isLoadedFromUrl = false;
     let yamlEditor; // Will be initialized by Monaco
+
+    // Configuration: compression algorithm to use ('gzip' or 'none')
+    const COMPRESSION_ALGORITHM = 'gzip';
 
     const getPreferredTheme = () => {
         const storedTheme = localStorage.getItem('theme')
@@ -213,15 +220,117 @@
 
     setTheme(getPreferredTheme());
 
-    function updateShareUrl() {
-        const data = {
-            path: pathInput.value,
-            yaml: yamlEditor.getValue(),
-        };
-        const encoded = btoa(encodeURIComponent(JSON.stringify(data)));
-        const newUrl = window.location.pathname + '#' + encoded;
+    // Helper function to compress data using CompressionStream API
+    async function compressData(data) {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+            start(controller) {
+                controller.enqueue(encoder.encode(data));
+                controller.close();
+            }
+        });
+        
+        const compressionStream = new CompressionStream('gzip');
+        const compressedStream = stream.pipeThrough(compressionStream);
+        const chunks = [];
+        const reader = compressedStream.getReader();
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+        }
+        
+        const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+        const result = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+            result.set(chunk, offset);
+            offset += chunk.length;
+        }
+        
+        return result;
+    }
+
+    // Helper function to decompress data using DecompressionStream API
+    async function decompressData(compressedData) {
+        const stream = new ReadableStream({
+            start(controller) {
+                controller.enqueue(compressedData);
+                controller.close();
+            }
+        });
+        
+        const decompressionStream = new DecompressionStream('gzip');
+        const decompressedStream = stream.pipeThrough(decompressionStream);
+        const chunks = [];
+        const reader = decompressedStream.getReader();
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+        }
+        
+        const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+        const result = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+            result.set(chunk, offset);
+            offset += chunk.length;
+        }
+        
+        const decoder = new TextDecoder();
+        return decoder.decode(result);
+    }
+
+    // Helper function to convert Uint8Array to base64url
+    function uint8ArrayToBase64Url(bytes) {
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    }
+
+    // Helper function to convert base64url to Uint8Array
+    function base64UrlToUint8Array(base64url) {
+        const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+        const padding = '='.repeat((4 - base64.length % 4) % 4);
+        const binary = atob(base64 + padding);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    async function updateShareUrl() {
+        const path = pathInput.value;
+        const yaml = yamlEditor.getValue();
+        
+        const url = new URL(window.location.href);
+        url.search = ''; // Clear existing query params
+        url.hash = ''; // Clear hash
+        
+        // Encode path parameter
+        url.searchParams.set('path', path);
+        
+        // Compress and encode yaml parameter
+        if (COMPRESSION_ALGORITHM === 'gzip') {
+            const compressed = await compressData(yaml);
+            const encoded = uint8ArrayToBase64Url(compressed);
+            url.searchParams.set('input', encoded);
+            url.searchParams.set('c', 'gzip');
+        } else {
+            // No compression
+            url.searchParams.set('input', encodeURIComponent(yaml));
+            url.searchParams.set('c', 'none');
+        }
+        
+        const newUrl = url.toString();
         history.replaceState(null, '', newUrl);
-        shareUrlInput.value = window.location.href;
+        shareUrlInput.value = newUrl;
     }
 
     async function main() {
@@ -229,7 +338,8 @@
         const result = await WebAssembly.instantiateStreaming(fetch('main.wasm'), go.importObject);
         go.run(result.instance);
 
-        let initialYaml = localStorage.getItem('yaml') || `store:
+        // Default sample data
+        const defaultYaml = `store:
   book:
     - category: reference
       author: Nigel Rees
@@ -242,19 +352,29 @@
   bicycle:
     color: red
     price: 19.95`;
-        let initialPath = localStorage.getItem('path') || '$.store.book[?(@.category=="fiction")].author';
+        const defaultPath = '$.store.book[?(@.category=="fiction")].author';
 
-        if (window.location.hash) {
+        let initialYaml = localStorage.getItem('yaml') || defaultYaml;
+        let initialPath = localStorage.getItem('path') || defaultPath;
+
+        // Parse query parameters for shared URLs
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('path') && urlParams.has('input')) {
             try {
-                const decoded = decodeURIComponent(atob(window.location.hash.substring(1)));
-                const data = JSON.parse(decoded);
-                if (data.path && data.yaml) {
-                    initialPath = data.path;
-                    initialYaml = data.yaml;
-                    isLoadedFromUrl = true;
+                initialPath = urlParams.get('path');
+                const compression = urlParams.get('c') || 'none';
+                const inputData = urlParams.get('input');
+                
+                if (compression === 'gzip') {
+                    const compressed = base64UrlToUint8Array(inputData);
+                    initialYaml = await decompressData(compressed);
+                } else {
+                    initialYaml = decodeURIComponent(inputData);
                 }
+                
+                isLoadedFromUrl = true;
             } catch (e) {
-                console.error("Failed to parse URL hash:", e);
+                console.error("Failed to parse URL parameters:", e);
             }
         }
 
@@ -317,6 +437,27 @@
                 const wordWrap = textWrapToggle.checked ? 'on' : 'off';
                 yamlEditor.updateOptions({wordWrap: wordWrap});
                 outputEditor.updateOptions({wordWrap: wordWrap});
+            });
+
+            clearButton.addEventListener('click', () => {
+                // Add current URL to history before clearing
+                history.pushState(null, '', window.location.href);
+                
+                // Reset to defaults
+                yamlEditor.setValue(defaultYaml);
+                pathInput.value = defaultPath;
+                
+                // Clear localStorage
+                localStorage.removeItem('yaml');
+                localStorage.removeItem('path');
+                
+                // Remove all query parameters and fragments from URL
+                const cleanUrl = window.location.origin + window.location.pathname;
+                history.pushState(null, '', cleanUrl);
+                
+                // Update evaluation and share URL
+                performEvaluation();
+                updateShareUrl();
             });
 
             pathInput.value = initialPath;
