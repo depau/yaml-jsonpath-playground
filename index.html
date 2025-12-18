@@ -84,7 +84,7 @@
     <main>
         <div class="mb-3">
             <label for="path-input">JSONPath Expression:</label>
-            <input type="text" id="path-input" class="form-control font-monospace" placeholder="$.store.book[*].author">
+            <input type="text" id="path-input" class="form-control font-monospace" placeholder='$.store.book[?(@.category=="fiction")].author'>
             <div id="error-alert" class="alert alert-danger"></div>
         </div>
         <div id="editors-container" class="row">
