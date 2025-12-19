@@ -454,6 +454,17 @@
                 }
             };
 
+            let evaluationTimer;
+            const DEBOUNCE_DELAY = 500; // milliseconds
+
+            const debouncedEvaluation = () => {
+                clearTimeout(evaluationTimer);
+                evaluationTimer = setTimeout(() => {
+                    performEvaluation();
+                    updateShareUrl();
+                }, DEBOUNCE_DELAY);
+            };
+
             textWrapToggle.addEventListener('change', () => {
                 const wordWrap = textWrapToggle.checked ? 'on' : 'off';
                 yamlEditor.updateOptions({wordWrap: wordWrap});
@@ -488,8 +499,7 @@
                     localStorage.setItem('yaml', yamlEditor.getValue());
                 }
                 isLoadedFromUrl = false; // Reset after first change
-                performEvaluation();
-                updateShareUrl();
+                debouncedEvaluation();
             });
 
             pathInput.addEventListener('input', () => {
@@ -497,8 +507,7 @@
                     localStorage.setItem('path', pathInput.value);
                 }
                 isLoadedFromUrl = false; // Reset after first change
-                performEvaluation();
-                updateShareUrl();
+                debouncedEvaluation();
             });
 
             performEvaluation();
